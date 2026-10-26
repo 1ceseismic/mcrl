@@ -1,0 +1,9 @@
+native/build*/
+mod/.gradle/
+mod/build/
+mod/rlassets/build/
+mod/run/
+*.so
+*.log
+rl-cache/
+mod/logs/

@@ -1,0 +1,3 @@
+[submodule "native/third_party/RocketSim"]
+	path = native/third_party/RocketSim
+	url = https://github.com/ZealanL/RocketSim

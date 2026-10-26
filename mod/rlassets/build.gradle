@@ -1,0 +1,64 @@
+plugins {
+	id 'java-library'
+	id 'application'
+}
+
+repositories {
+	mavenCentral()
+}
+
+group = rootProject.group
+version = rootProject.version
+
+// Gson for the CLI only: Minecraft supplies it in the game.
+configurations {
+	cliRuntime {
+		canBeConsumed = false
+		canBeResolved = false
+	}
+	runtimeClasspath.extendsFrom cliRuntime
+}
+
+dependencies {
+	cliRuntime "com.google.code.gson:gson:2.14.0"
+	compileOnly "org.jspecify:jspecify:1.0.0"
+	compileOnly "com.google.code.gson:gson:2.14.0"
+	testImplementation "com.google.code.gson:gson:2.14.0"
+
+	testImplementation platform("org.junit:junit-bom:${rootProject.property('junit_version')}")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+test {
+	useJUnitPlatform()
+	systemProperty "java.awt.headless", "true"
+}
+
+application {
+	mainClass = "dev.mcrl.rlassets.Cli"
+	applicationDefaultJvmArgs = ["-Xmx768m", "-Djava.awt.headless=true"]
+}
+
+tasks.named("run") {
+	notCompatibleWithConfigurationCache("reads the environment and the RL install at run time")
+}
+
+tasks.register("verifyCliClasspath") {
+	def rt = configurations.runtimeClasspath
+	doLast {
+		if (!rt.files.any { it.name.startsWith("gson-") }) {
+			throw new GradleException("Gson is missing from :rlassets runtimeClasspath")
+		}
+	}
+}
+tasks.named("test") { dependsOn "verifyCliClasspath" }

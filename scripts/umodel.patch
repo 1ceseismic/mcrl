@@ -1,0 +1,264 @@
+diff --git i/UmodelTool/Main.cpp w/UmodelTool/Main.cpp
+index 5294499..179facc 100644
+--- i/UmodelTool/Main.cpp
++++ w/UmodelTool/Main.cpp
+@@ -37,6 +37,10 @@
+ #include "Version.h"
+ #include "MiscStrings.h"
+ 
++// mcrl local patch: -mcrl-unpack, -mcrl-keep-alpha
++#include "UnrealPackage/UnPackageUE3Reader.h"
++#include "Wrappers/TexturePNG.h"
++
+ #define APP_CAPTION					"UE Viewer"
+ 
+ //#define SHOW_HIDDEN_SWITCHES		1
+@@ -367,6 +371,7 @@ static void PrintUsage()
+ 			"    -list           list contents of package\n"
+ 			"    -export         export specified object or whole package\n"
+ 			"    -save           save specified packages\n"
++			"    -mcrl-unpack    write decrypted, decompressed package images to -out=PATH\n"
+ 			"\n"
+ 			"Help information:\n"
+ 			"    -help           display this help page\n"
+@@ -446,6 +451,8 @@ static void PrintUsage()
+ 			"    -notgacomp      disable TGA compression\n"
+ 			"    -nooverwrite    prevent existing files from being overwritten (better\n"
+ 			"                    performance)\n"
++			"    -mcrl-keep-alpha\n"
++			"                    keep every PNG channel, even an all-0 or all-255 alpha\n"
+ 			"\n"
+ 			"Supported resources for export:\n"
+ 			"    SkeletalMesh    exported as ActorX psk file, MD5Mesh or glTF\n"
+@@ -732,6 +739,113 @@ static void TestStrings()
+ 	exit(0);
+ }
+ 
++/*-----------------------------------------------------------------------------
++	mcrl local patch: -mcrl-unpack
++-----------------------------------------------------------------------------*/
++
++// Copies bytes [0, End) of the package's uncompressed view to f, 1 MiB at a time.
++static void McrlCopyImage(UnPackage* Package, int End, FILE* f)
++{
++	guard(McrlCopyImage);
++
++	// Positions below the first compressed chunk come from the loader's header buffer: the plain summary, then the
++	// tables (decrypted for Rocket League). That buffer runs to the chunk's file offset, which can lie past the chunk's
++	// uncompressed offset, so the chunk is prepared explicitly when the copy reaches it.
++	FUE3ArchiveReader* UE3Loader = Package->Loader->CastTo<FUE3ArchiveReader>();
++	// An uncompressed package has no chunk: its whole view comes straight from the file.
++	int ChunkStart = UE3Loader && UE3Loader->CompressedChunks.Num() > 0
++		? min(UE3Loader->CompressedChunks[0].UncompressedOffset, End) : End;
++
++	static byte Buffer[1 << 20];
++	if (!Package->IsOpen()) Package->Open();	// closed once the tables were loaded
++	Package->SetStopper(0);
++	for (int Pos = 0; Pos < End; )
++	{
++		if (Pos == ChunkStart)
++			UE3Loader->PrepareBuffer(Pos);
++		int Size = min(End - Pos, (int)sizeof(Buffer));
++		if (Pos < ChunkStart)
++			Size = min(Size, ChunkStart - Pos);
++		Package->Seek(Pos);
++		Package->Serialize(Buffer, Size);
++		if (fwrite(Buffer, Size, 1, f) != 1)
++			appError("Write failed");
++		Pos += Size;
++	}
++	Package->CloseReader();
++
++	unguard;
++}
++
++// Writes <OutDir>/<Name>.bin: the package's uncompressed view up to the end of its headers and of every export.
++// Returns false when the package cannot be loaded.
++static bool McrlUnpackPackage(const char* PkgName, const char* OutDir)
++{
++	guard(McrlUnpackPackage);
++
++	UnPackage* Package = UnPackage::LoadPackage(PkgName);
++	if (!Package) return false;
++
++	int64 End = Package->Summary.HeadersSize;
++	for (int i = 0; i < Package->Summary.ExportCount; i++)
++	{
++		const FObjectExport& Exp = Package->ExportTable[i];
++		End = max(End, (int64)Exp.SerialOffset + Exp.SerialSize);
++	}
++	if (End > 0x7FFFFFFF) appError("Package image is larger than 2 GB");
++
++	char BinName[512], TmpName[512];
++	appSprintf(ARRAY_ARG(BinName), "%s/%s.bin", OutDir, Package->Name);
++	appSprintf(ARRAY_ARG(TmpName), "%s.tmp", BinName);
++	FILE* f = fopen(TmpName, "wb");
++	if (!f) appError("Unable to create %s", TmpName);
++	TRY {
++		McrlCopyImage(Package, (int)End, f);
++	} CATCH {
++		fclose(f);
++		remove(TmpName);
++		THROW_AGAIN;
++	}
++	if (fclose(f) != 0)
++	{
++		remove(TmpName);
++		appError("Write failed: %s", TmpName);
++	}
++#if _WIN32
++	remove(BinName);					// rename() does not replace an existing file on Windows
++#endif
++	if (rename(TmpName, BinName) != 0) appError("Unable to rename %s", TmpName);
++	appPrintf("mcrl-unpack: %s %d bytes\n", PkgName, (int)End);
++	return true;
++
++	unguardf("%s", PkgName);
++}
++
++// Writes every package's image; a package that fails is reported and the rest go on.
++// Returns the exit code: 0 when every package was written, else 1.
++static int McrlUnpack(const TArray<const char*>& Packages, const char* OutDir)
++{
++	appMakeDirectory(OutDir);
++	int NumFailed = 0;
++	for (int i = 0; i < Packages.Num(); i++)
++	{
++		bool Written = false;
++		TRY {
++			Written = McrlUnpackPackage(Packages[i], OutDir);
++		} CATCH {
++			GError.StandardHandler();			// prints the error and appends it to notify.log
++			GError.Reset();
++			GError.SetErrorHandler(ExceptionHandler);
++		}
++		if (!Written)
++		{
++			appPrintf("mcrl-unpack: FAILED %s\n", Packages[i]);
++			NumFailed++;
++		}
++	}
++	return NumFailed ? 1 : 0;
++}
++
+ #define OPT_BOOL(name,var)				{ name, (byte*)&var, true  },
+ #define OPT_NBOOL(name,var)				{ name, (byte*)&var, false },
+ #define OPT_VALUE(name,var,value)		{ name, (byte*)&var, value },
+@@ -791,6 +905,7 @@ int main(int argc, const char **argv)
+ 		CMD_List,
+ 		CMD_Export,
+ 		CMD_Save,
++		CMD_McrlUnpack,				// mcrl local patch
+ 	};
+ 
+ 	static byte mainCmd = CMD_View;
+@@ -798,6 +913,7 @@ int main(int argc, const char **argv)
+ 	TArray<const char*> packagesToLoad, objectsToLoad;
+ 	TArray<const char*> params;
+ 	const char *attachAnimName = NULL;
++	const char *mcrlOutDir = NULL;			// mcrl local patch: -out=, required by -mcrl-unpack
+ 	for (int arg = 1; arg < argc; arg++)
+ 	{
+ 		const char *opt = argv[arg];
+@@ -818,6 +934,7 @@ int main(int argc, const char **argv)
+ 			OPT_VALUE("save",    mainCmd, CMD_Save)
+ 			OPT_VALUE("pkginfo", mainCmd, CMD_PkgInfo)
+ 			OPT_VALUE("list",    mainCmd, CMD_List)
++			OPT_VALUE("mcrl-unpack", mainCmd, CMD_McrlUnpack)	// mcrl local patch
+ #if VSTUDIO_INTEGRATION
+ 			OPT_BOOL ("debug",   GUseDebugger)
+ #endif
+@@ -841,6 +958,7 @@ int main(int argc, const char **argv)
+ 			OPT_BOOL ("dds",     GSettings.Export.ExportDdsTexture)
+ 			OPT_BOOL ("notgacomp", GNoTgaCompress)
+ 			OPT_BOOL ("nooverwrite", GDontOverwriteFiles)
++			OPT_BOOL ("mcrl-keep-alpha", GPngKeepAlpha)		// mcrl local patch
+ #if HAS_UI
+ 			OPT_BOOL ("gui",     forceUI)
+ #endif
+@@ -892,6 +1010,7 @@ int main(int argc, const char **argv)
+ 		else if (!strnicmp(opt, "out=", 4))
+ 		{
+ 			GSettings.Export.SetPath(opt+4);
++			mcrlOutDir = opt+4;
+ 		}
+ 		else if (!strnicmp(opt, "game=", 5))
+ 		{
+@@ -989,6 +1108,11 @@ int main(int argc, const char **argv)
+ 		CommandLineError("too many arguments, please check your command line.\nYou specified: package=%s, object=%s, class=%s",
+ 			argPkgName, argObjName, argClassName);
+ 	}
++	// mcrl local patch
++	if (mainCmd == CMD_McrlUnpack && (!mcrlOutDir || !argPkgName))
++	{
++		CommandLineError("-mcrl-unpack needs -out=PATH and a <package>");
++	}
+ 
+ #if HAS_UI
+ 	if (argPkgName && !argObjName && !argClassName && !hasRootDir)
+@@ -1067,6 +1191,12 @@ int main(int argc, const char **argv)
+ 		appSetRootDirectory(".");			// scan for packages
+ 	}
+ 
++	// mcrl local patch: package images only; no object is loaded, viewed or exported
++	if (mainCmd == CMD_McrlUnpack)
++	{
++		return McrlUnpack(packagesToLoad, mcrlOutDir);
++	}
++
+ 	bool bShouldLoadPackages = (mainCmd != CMD_Save);
+ 	TArray<const CGameFileInfo*> GameFiles;
+ 
+diff --git i/Unreal/UnrealPackage/UnPackage.h w/Unreal/UnrealPackage/UnPackage.h
+index 942456b..da723ac 100644
+--- i/Unreal/UnrealPackage/UnPackage.h
++++ w/Unreal/UnrealPackage/UnPackage.h
+@@ -61,6 +61,14 @@ struct FCompressedChunk
+ 			Ar << UncompressedOffset64 << C.UncompressedSize << CompressedOffset64 << C.CompressedSize;
+ 			C.UncompressedOffset = (int)UncompressedOffset64;
+ 			C.CompressedOffset   = (int)CompressedOffset64;
++#if ROCKET_LEAGUE
++			if (Ar.Game == GAME_RocketLeague && Ar.ArLicenseeVer >= 33)
++			{
++				// mcrl local patch: Rocket League LicenseeVer >= 33 has 36-byte chunk entries (12 extra bytes, observed all zero)
++				int32 unkRL[3];
++				Ar << unkRL[0] << unkRL[1] << unkRL[2];
++			}
++#endif
+ 			return Ar;
+ 		}
+ #endif // MKVSDC
+diff --git i/Unreal/Wrappers/TexturePNG.cpp w/Unreal/Wrappers/TexturePNG.cpp
+index a5a2419..07db450 100644
+--- i/Unreal/Wrappers/TexturePNG.cpp
++++ w/Unreal/Wrappers/TexturePNG.cpp
+@@ -189,6 +189,8 @@ bool UncompressPNG(const unsigned char* CompressedData, int CompressedSize, int
+ 	unguard;
+ }
+ 
++bool GPngKeepAlpha = false;		// mcrl local patch: -mcrl-keep-alpha
++
+ void CompressPNG(const unsigned char* pic, int Width, int Height, TArray<byte>& CompressedData)
+ {
+ 	guard(CompressPNG);
+@@ -220,6 +222,8 @@ void CompressPNG(const unsigned char* pic, int Width, int Height, TArray<byte>&
+ 		}
+ 		if (bAllZero) PixelChannels = 3;
+ 	}
++	// mcrl local patch: an all-0 alpha is data too (a mask), not only transparency
++	if (GPngKeepAlpha) PixelChannels = 4;
+ 
+ 	unsigned char* newPic = NULL;
+ 	if (PixelChannels == 3)
+diff --git i/Unreal/Wrappers/TexturePNG.h w/Unreal/Wrappers/TexturePNG.h
+index 06f7861..3d792f5 100644
+--- i/Unreal/Wrappers/TexturePNG.h
++++ w/Unreal/Wrappers/TexturePNG.h
+@@ -4,4 +4,7 @@
+ bool UncompressPNG(const unsigned char* CompressedData, int CompressedSize, int Width, int Height, unsigned char* pic, bool bgra);
+ void CompressPNG(const unsigned char* pic, int Width, int Height, TArray<byte>& CompressedData);
+ 
++// mcrl local patch: -mcrl-keep-alpha, CompressPNG keeps the alpha channel even when it is all 0 or all 255
++extern bool GPngKeepAlpha;
++
+ #endif // __UNTEXTUREPNG_H__

@@ -1,0 +1,2 @@
+# RocketSim copies btWheelInfo before setting m_isInContact; benign.
+bool:btWheelInfo.h

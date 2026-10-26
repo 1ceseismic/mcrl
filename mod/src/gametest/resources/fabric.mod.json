@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "mcrl-test",
+	"version": "0.1.0",
+	"name": "mcrl tests",
+	"description": "Gametests for mcrl.",
+	"license": "GPL-3.0-or-later",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-gametest": [
+			"dev.mcrl.test.McrlServerSmokeTest",
+			"dev.mcrl.test.CarGameTests",
+			"dev.mcrl.test.TerrainGameTests",
+			"dev.mcrl.test.MobDamageGameTests",
+			"dev.mcrl.test.PassengerGameTests",
+			"dev.mcrl.test.PhysicsRestartGameTests",
+			"dev.mcrl.test.CarPresetGameTests",
+			"dev.mcrl.test.DemolitionGameTests",
+			"dev.mcrl.test.OwnershipGameTests",
+			"dev.mcrl.test.MatchGameTests",
+			"dev.mcrl.test.SurfaceGameTests",
+			"dev.mcrl.test.FluidGameTests",
+			"dev.mcrl.test.BallHitGameTests",
+			"dev.mcrl.test.BotGameTests",
+			"dev.mcrl.test.CarChoiceGameTests"
+		]
+	},
+	"mixins": [
+		"mcrl-test.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"fabric-api": "*",
+		"mcrl": "*"
+	}
+}
