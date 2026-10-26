@@ -1,0 +1,33 @@
+{
+	"schemaVersion": 1,
+	"id": "mcrl",
+	"version": "${version}",
+	"name": "mcrl",
+	"description": "Drive a Rocket League car (RocketSim) in Minecraft.",
+	"authors": [
+		"1ceseismic"
+	],
+	"license": "GPL-3.0-or-later",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"dev.mcrl.Mcrl"
+		],
+		"client": [
+			"dev.mcrl.client.McrlClient"
+		]
+	},
+	"mixins": [
+		"mcrl.mixins.json",
+		{
+			"config": "mcrl.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

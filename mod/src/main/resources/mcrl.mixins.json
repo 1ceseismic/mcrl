@@ -1,0 +1,21 @@
+{
+	"required": true,
+	"package": "dev.mcrl.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [
+		"LevelChunkMixin",
+		"PlayerListMixin",
+		"EntityPassengerMixin",
+		"LivingEntityPassengerMixin",
+		"PlayerPassengerMixin",
+		"ChunkMapAccessor",
+		"TrackedEntityAccessor",
+		"TrackedEntityRangeMixin",
+		"ChunkMapViewMixin",
+		"ServerExplosionAccessor",
+		"ServerboundCustomPayloadPacketMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

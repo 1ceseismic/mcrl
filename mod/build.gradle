@@ -1,0 +1,117 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"mcrl" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+
+	runs {
+		configureEach {
+			jvmArguments.add("--enable-native-access=ALL-UNNAMED")
+		}
+	}
+}
+
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "mcrl-test"
+		enableGameTests = true
+		enableClientGameTests = false
+	}
+}
+
+// Server gametests step the sim in lockstep.
+loom.runs.matching { it.name == "gameTest" }.configureEach {
+	property("mcrl.clock", "lockstep")
+}
+
+// Shared test fixtures for the unit tests and gametests.
+sourceSets.test.java.srcDir("src/testFixtures/java")
+sourceSets.gametest.java.srcDir("src/testFixtures/java")
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// The RL asset converter, bundled as a jar-in-jar.
+	implementation project(':rlassets')
+	include project(':rlassets')
+
+	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+	testImplementation platform("org.junit:junit-bom:${project.junit_version}")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+def nativeLib = layout.projectDirectory.file("../native/build/libmcrl_rs.so")
+def generatedNatives = layout.buildDirectory.dir("generated/natives")
+
+// Bundles the CMake-built native shim; fails when missing.
+tasks.register("copyNative", Copy) {
+	def src = nativeLib.asFile
+	inputs.files(nativeLib).optional()
+	into(generatedNatives)
+	from(src) {
+		into("natives/linux-x86_64")
+	}
+	doFirst {
+		if (!src.isFile()) {
+			throw new GradleException("native shim missing: ${src} -- build it first: " +
+					"cmake -S native -B native/build && cmake --build native/build")
+		}
+	}
+}
+
+sourceSets.main.resources.srcDir(files(generatedNatives).builtBy(tasks.named("copyNative")))
+
+processResources {
+	dependsOn tasks.named("copyNative")
+
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+test {
+	useJUnitPlatform()
+	systemProperty "mcrl.native", file("../native/build/libmcrl_rs.so").absolutePath
+	jvmArgs "--enable-native-access=ALL-UNNAMED"
+}
+
+jar {
+	def projectName = project.name
+	inputs.property "projectName", projectName
+
+	from("../LICENSE") {
+		rename { "${it}_$projectName"}
+	}
+}
+
+def localBuild = file("local.gradle")
+if (localBuild.exists()) {
+	apply from: localBuild
+}

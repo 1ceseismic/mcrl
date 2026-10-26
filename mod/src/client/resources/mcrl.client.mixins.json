@@ -1,0 +1,28 @@
+{
+	"required": true,
+	"package": "dev.mcrl.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [],
+	"client": [
+		"CameraMixin",
+		"ClientPacketListenerMixin",
+		"EntityRendererMixin",
+		"GameRendererMixin",
+		"GuiGraphicsExtractorAccessor",
+		"HudMixin",
+		"IntegratedServerMixin",
+		"KeyboardInputMixin",
+		"MinecraftMixin",
+		"MouseHandlerMixin",
+		"RenderTypeInvoker",
+		"SoundBufferLibraryMixin",
+		"SoundEngineAccessor",
+		"SoundEngineMixin",
+		"SoundManagerAccessor",
+		"StadiumBodiesVisibleMixin",
+		"StadiumFogMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
