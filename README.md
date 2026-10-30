@@ -3,9 +3,9 @@
 rocket league in minecraft 26.3 (linux)
 using [RocketSim](https://github.com/ZealanL/RocketSim) for physics sim
 
-Supports ingame rl matches, supports trained gigalearn ML bots (included misc of mine for reference), or real players over LAN
+Supports ingame rl matches, supports trained gigalearn ML bots (included misc of mine for reference: `bots/20b`), or real players over LAN
 
-Needs a rocket league install for inital assets retrieval
+Needs a rocket league install for initial assets retrieval
 
 #### build
 
@@ -40,7 +40,7 @@ ingame mc chat commands:
 ```
 more commands/options are in the mcrl settings (M)
 
-Uses default rl controls (support both kbm and controller):
+Uses default rl controls (support both kbm and controller)
 Bots need a GigaLearn policy, set on the Match tab.
 
 ### Licence
