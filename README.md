@@ -7,6 +7,8 @@ Supports ingame rl matches, supports trained gigalearn ML bots (included misc of
 
 Needs a rocket league install for initial assets retrieval
 
+<img width="49%" alt="bots-3v3-goal-scored" src="https://github.com/user-attachments/assets/06c4e859-b8dd-44f4-9b8b-21c7add49428" /> <img width="49%" alt="mobs-village-line-demo" src="https://github.com/user-attachments/assets/089155ea-ca7c-4841-85fa-e499ac9df3a1" /> <img width="49%" height="270" alt="aerial-lake" src="https://github.com/user-attachments/assets/27f047e3-cc6d-4cb0-b6cb-555ed9b6c9c0" />
+
 #### build
 
 JDK: 25, Cmake: 3.20+, C++20
